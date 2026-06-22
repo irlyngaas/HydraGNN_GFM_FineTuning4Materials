@@ -192,6 +192,11 @@ def build_arg_parser():
         action="store_true",
         help="for use with evaluate_finetuned_checkpoint",
     )
+    parser.add_argument(
+        "--task_names",
+        nargs="+",
+        help="for use with matbench compile.py",
+    )
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
