@@ -1341,7 +1341,7 @@ def compute_predictions(task_name, true_vals, pred_mean, natoms):
     pred_ = pred_mean[0].cpu()
     if task_name == "matbench_jdft2d" and natoms is not None:
         natoms_ = torch.cat(natoms, dim=0)
-        return (pred_ * 1000 / natoms.to('cpu')).numpy()
+        return (pred_ * 1000 / natoms_.to('cpu')).numpy()
 
     elif task_name == "matbench_mp_is_metal":
         return torch.sigmoid(pred_).numpy()
