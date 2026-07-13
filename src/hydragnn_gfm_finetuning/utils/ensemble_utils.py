@@ -1472,12 +1472,58 @@ def evaluate_finetuned_checkpoint(dictionary_variables, args):
             ens_ddp.module.model_ens[i].load_state_dict(ckpt["model_state_dict"])
 
         # Test the ensemble
-        true_vals, pred_mean, pred_std, natoms = test_ensemble(
+        true_, pred_mean, pred_std, natoms = test_ensemble(
             ens_ddp, test_loader, modelname, verbosity=2, save_results=True
         )
 
         if args.matbench:
-            pred_vals = compute_predictions(task_name, true_vals, pred_mean, natoms)
+            pred_ = pred_mean[0]  # shape: [NumSamples]
+
+            if task_name in ["matbench_jdft2d"] and len(natoms) > 0:
+                natoms_ = torch.cat(natoms, dim=0)
+                print("PRED (meV/atom)", pred_.to('cpu') * 1000 / natoms_.to('cpu'))
+                print("TRUE (meV/atom)", true_[0].to('cpu') * 1000 / natoms_.to('cpu'))
+                absdiff_scaled = torch.absolute(
+                    true_[0].to('cpu') * 1000 / natoms_.to('cpu')
+                    - pred_.to('cpu') * 1000 / natoms_.to('cpu')
+                )
+                print("MAE (meV/atom):", torch.mean(absdiff_scaled).item())
+                print(
+                    "RMSE (meV/atom):",
+                    torch.sqrt(torch.mean(absdiff_scaled ** 2)).item(),
+                )
+                print("Max error (meV/atom):", torch.max(absdiff_scaled).item())
+
+            elif task_name in ["matbench_mp_is_metal"]:
+                print(
+                    "CORRECT_COUNT:",
+                    torch.eq(true_[0].to('cpu'), (torch.sigmoid(pred_.to('cpu')) > 0.5)).sum().item(),
+                )
+                print(
+                    "Percentage Correct:",
+                    torch.eq(true_[0].to('cpu'), (torch.sigmoid(pred_.to('cpu')) > 0.5)).sum().item()
+                    / true_[0].to('cpu').shape[0],
+                )
+                print(
+                    "ROCAUC:",
+                    roc_auc_score(true_[0].detach().cpu().numpy(), pred_.detach().cpu().numpy()),
+                )
+                print(
+                    "F1:",
+                    f1_score(
+                        true_[0].detach().cpu().numpy(),
+                        (torch.sigmoid(pred_) > 0.5).detach().cpu().numpy(),
+                    ),
+                )
+                print(
+                    "Balanced_acc:",
+                    balanced_accuracy_score(
+                        true_[0].detach().cpu().numpy(),
+                        (torch.sigmoid(pred_) > 0.5).detach().cpu().numpy(),
+                    ),
+                )
+
+            pred_vals = compute_predictions(task_name, true_, pred_mean, natoms)
             # Save raw predictions to JSON -- no MatbenchBenchmark object involved yet
             os.makedirs(args.output_dir, exist_ok=True)
             out_path = os.path.join(args.output_dir, f"{task_name}_fold{fold_idx}_predictions.json")
